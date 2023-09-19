@@ -1,50 +1,47 @@
 # coding: utf-8
 import datetime
-import json
 from time import sleep
-from typing import Any, Dict, List, Type
+from typing import Any
 
 import pytz
-from astral import Location
-from influxdb import InfluxDBClient
+from astral.geocoder import LocationInfo
 from requests import get
 from requests.exceptions import ConnectionError
+from src.fronius_gen24.config import Configuration
+
+from src.fronius_gen24.exceptions import (
+    WrongFroniusData,
+    DataCollectionError,
+    SunIsDown,
+)
 
 
-class WrongFroniusData(Exception):
-    pass
-
-
-class SunIsDown(Exception):
-    pass
-
-
-class DataCollectionError(Exception):
-    pass
-
-
-class FroniusToInflux:
+class FroniusToPostgres:
     BACKOFF_INTERVAL = 3
-    IGNORE_SUN_DOWN = False
+    IGNORE_SUN_DOWN: bool = False
 
     def __init__(
-        self, client: InfluxDBClient, location: Location, endpoints: List[str], tz: Any
+        self,
+        config: Configuration,
+        location: LocationInfo,
+        endpoints: list[str],
+        tz: Any,
     ) -> None:
-        self.client = client
+        self.config = config
         self.location = location
         self.endpoints = endpoints
         self.tz = tz
-        self.data: Dict[Any, Any] = {}
+        self.data: dict[Any, Any] = {}
 
     def get_float_or_zero(self, value: str) -> float:
-        internal_data: Dict[Any, Any] = {}
+        internal_data: dict[Any, Any] = {}
         try:
             internal_data = self.data["Body"]["Data"]
         except KeyError:
             raise WrongFroniusData("Response structure is not healthy.")
         return float(internal_data.get(value, {}).get("Value", 0))
 
-    def translate_response(self) -> List[Dict]:
+    def translate_response(self) -> list[dict]:
         collection = self.data["Head"]["RequestArguments"]["DataCollection"]
         timestamp = self.data["Head"]["Timestamp"]
         if collection == "CommonInverterData":
@@ -80,12 +77,16 @@ class FroniusToInflux:
                         "FAC": self.get_float_or_zero("FAC"),
                         "IAC": self.get_float_or_zero("IAC"),
                         "IDC": self.get_float_or_zero("IDC"),
-                        "PAC": self.get_float_or_zero("PAC"),
+                        "PAC": self.get_float_or_zero(
+                            "PAC"
+                        ),  # AC power (negative value for consuming power) in W
                         "UAC": self.get_float_or_zero("UAC"),
                         "UDC": self.get_float_or_zero("UDC"),
                         "DAY_ENERGY": self.get_float_or_zero("DAY_ENERGY"),
                         "YEAR_ENERGY": self.get_float_or_zero("YEAR_ENERGY"),
-                        "TOTAL_ENERGY": self.get_float_or_zero("TOTAL_ENERGY"),
+                        "TOTAL_ENERGY": self.get_float_or_zero(
+                            "TOTAL_ENERGY"
+                        ),  # AC Energy generated overall in Wh
                     },
                 },
             ]
@@ -104,24 +105,6 @@ class FroniusToInflux:
                     },
                 }
             ]
-        elif collection == "MinMaxInverterData":
-            return [
-                {
-                    "measurement": collection,
-                    "time": timestamp,
-                    "fields": {
-                        "DAY_PMAX": self.get_float_or_zero("DAY_PMAX"),
-                        "DAY_UACMAX": self.get_float_or_zero("DAY_UACMAX"),
-                        "DAY_UDCMAX": self.get_float_or_zero("DAY_UDCMAX"),
-                        "YEAR_PMAX": self.get_float_or_zero("YEAR_PMAX"),
-                        "YEAR_UACMAX": self.get_float_or_zero("YEAR_UACMAX"),
-                        "YEAR_UDCMAX": self.get_float_or_zero("YEAR_UDCMAX"),
-                        "TOTAL_PMAX": self.get_float_or_zero("TOTAL_PMAX"),
-                        "TOTAL_UACMAX": self.get_float_or_zero("TOTAL_UACMAX"),
-                        "TOTAL_UDCMAX": self.get_float_or_zero("TOTAL_UDCMAX"),
-                    },
-                }
-            ]
         else:
             raise DataCollectionError("Unknown data collection type.")
 
@@ -134,6 +117,10 @@ class FroniusToInflux:
             raise SunIsDown
         return None
 
+    @staticmethod
+    def get_response(url: str) -> Any:
+        return get(url)
+
     def run(self) -> None:
         try:
             while True:
@@ -141,7 +128,7 @@ class FroniusToInflux:
                     self.sun_is_shining()
                     collected_data = []
                     for url in self.endpoints:
-                        response = get(url)
+                        response = self.get_response(url)
                         self.data = response.json()
                         collected_data.extend(self.translate_response())
                         sleep(self.BACKOFF_INTERVAL)

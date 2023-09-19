@@ -2,12 +2,13 @@
 database.ini
 fronius-data-test.ipynb
 load_yaml.ipynb
+test_config.py
 postgreSQL-fronius-gen24.code-workspace
-
+fronius-json.py
+fronius-solar-api-v1.pdf
 
 #specific folders to ignore
-/tests
-/dev
+
 
 
 # Byte-compiled / optimized / DLL files
