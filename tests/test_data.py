@@ -1,16 +1,28 @@
 import pytest
 import pytz
+import datetime
 from astral.geocoder import database, lookup
+from astral.sun import sun
 from src.fronius_gen24.data import FroniusToPostgres
 from src.fronius_gen24.config import Configuration
+from src.fronius_gen24.postgresql_tasks import PostgresTasks
+from src.fronius_gen24.exceptions import (
+    WrongFroniusData,
+    DataCollectionError,
+    SunIsDown,
+)
 
 
 @pytest.fixture  # instance of Class FroniusToPostgres
 def froniustopostgres():
     # instance of Configuration class
     config = Configuration()
+    # instance of PostgresTasks
+    client = PostgresTasks()
     # initialize location
-    location = lookup("Vienna", database())
+    city = lookup("Vienna", database())
+    # calculates the time of the sun in UTC
+    location = sun(city.observer, date=datetime.date.today())
     # define endpoints for http requests
     fronius_config = config.fronius_config()
     endpoints = [
@@ -19,7 +31,7 @@ def froniustopostgres():
     ]
     # initialize timezone
     tz = pytz.timezone("Europe/Vienna")
-    return FroniusToPostgres(config, location, endpoints, tz)
+    return FroniusToPostgres(config, client, location, endpoints, tz)
 
 
 @pytest.fixture  # data response as transmitted by Fronius API V1
@@ -81,22 +93,30 @@ def test_translate_response_2(froniustopostgres, responsedata):
     assert response_object[1]["fields"]["TOTAL_ENERGY"] == 1734796.1200000001
 
 
-def t_sun_is_shining(froniustopostgres):
+# run at daytime, test will fail at nighttime
+def test_sun_is_shining_1(froniustopostgres):
     assert froniustopostgres.sun_is_shining() == None
 
 
-def t_run(mocker):
-    output_list = [
-        "Filesystem Size Used Avail Use% Mounted on",
-        "rootfs 472G 128G 344G 28% /",
-        "none 472G 128G 344G 28% /dev",
-    ]
-    output = "\n".join(output_list)
-    mock_run = mocker.patch(
+# run at nighttime, test will fail at daytime
+def test_sun_is_shining_2(froniustopostgres):
+    with pytest.raises(SunIsDown):
+        froniustopostgres.sun_is_shining()
+
+
+def test_get_response(mocker, froniustopostgres, responsedata):
+    output = responsedata
+    mocker.patch(
         "src.fronius_gen24.data.FroniusToPostgres.get_response", return_value=output
     )
-    d = FroniusToPostgres(socket.gethostname())
-    result = d.disk_free()
-    percent = d.extract_percent(result)
-    mock_run.assert_called_with("df -h")
-    assert percent == "28%"
+    response_object = froniustopostgres.get_response()
+    assert response_object["Body"]["Data"]["PAC"]["Value"] == 84
+
+
+def test_run(mocker, froniustopostgres, responsedata):
+    output = responsedata
+    mocker.patch(
+        "src.fronius_gen24.data.FroniusToPostgres.get_response", return_value=output
+    )
+    response_object = froniustopostgres.get_response()
+    assert response_object["Body"]["Data"]["PAC"]["Value"] == 84

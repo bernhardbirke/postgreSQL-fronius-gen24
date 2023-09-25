@@ -37,6 +37,14 @@ Module to run the tests
 In `database.ini` the connection details of postgresql and the fronius inverter are stored.
 In `main_config.yaml` connection configurations are stored.
 
+### saved data
+
+Value name | specific data | unit | type Description
+PAC | integer | W | AC power (negative value for consuming power)
+
+TOTAL_ENERGY | unsigned number | Wh | AC Energy generated overall GEN24/Tauro: supported since 1.14(updated every
+5min)
+
 ### To connect to mqtt or influx databases please refer to the following solutions:
 
 https://github.com/akleber/mqtt-connectors/blob/master/fronius-connector.py

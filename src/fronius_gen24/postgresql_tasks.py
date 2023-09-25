@@ -1,36 +1,30 @@
 #!/usr/bin/python
 
 import psycopg2
-from config import Configuration
+from src.fronius_gen24.config import Configuration
 
 
 class PostgresTasks:
     config = Configuration()
 
-    def create_table_fronius_gen24(self):
+    def create_table_fronius_gen24(self) -> None:
         """create table fronius_gen24 in the PostgreSQL database (database specified in config.py), saves common inverter data"""
         command = """
         CREATE TABLE fronius_gen24 (
             data_id SERIAL PRIMARY KEY,
             time TIMESTAMP NOT NULL,
-            wirkenergie_p FLOAT4,
-            wirkenergie_n FLOAT4,
-            momentanleistung_p FLOAT4,
-            momentanleistung_n FLOAT4,
-            spannung_l1 FLOAT4,
-            spannung_l2 FLOAT4,
-            spannung_l3 FLOAT4,
-            strom_l1 FLOAT4,
-            strom_l2 FLOAT4,
-            strom_l3 FLOAT4,
-            leistungsfaktor FLOAT4
+            PAC FLOAT4,
+            IAC FLOAT4,
+            UAC FLOAT4,
+            FAC FLOAT4,
+            TOTAL_ENERGY FLOAT4
         )
         """
 
         conn = None
         try:
             # read the connection parameters
-            params = self.config.postgresql_config()
+            params = PostgresTasks.config.postgresql_config()
             # connect to the PostgreSQL server
             conn = psycopg2.connect(**params)
             cur = conn.cursor()
@@ -46,28 +40,22 @@ class PostgresTasks:
             if conn is not None:
                 conn.close()
 
-    def insert_smartmeter(
+    def insert_fronius_gen24(
         self,
-        WirkenergieP,
-        WirkenergieN,
-        MomentanleistungP,
-        MomentanleistungN,
-        SpannungL1,
-        SpannungL2,
-        SpannungL3,
-        StromL1,
-        StromL2,
-        StromL3,
-        Leistungsfaktor,
-    ):
-        """insert a new data row into the smartmeter table"""
-        sql = """INSERT INTO smartmeter(time, wirkenergie_p, wirkenergie_n, momentanleistung_p, momentanleistung_n, spannung_l1, spannung_l2, spannung_l3, strom_l1, strom_l2, strom_l3, leistungsfaktor)
-                VALUES(NOW()::TIMESTAMP, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING data_id;"""
+        PAC: int,
+        IAC: float,
+        UAC: float,
+        FAC: float,
+        TOTAL_ENERGY: float,
+    ) -> int:
+        """insert a new data row into the fronius_gen24 table"""
+        sql = """INSERT INTO fronius_gen24(time, PAC, IAC, UAC, FAC, TOTAL_ENERGY)
+                VALUES(NOW()::TIMESTAMP, %s, %s, %s, %s, %s) RETURNING data_id;"""
         conn = None
         data_id = None
         try:
             # read database configuration
-            params = self.config.postgresql_config()
+            params = PostgresTasks.config.postgresql_config()
             # connect to the PostgreSQL database
             conn = psycopg2.connect(**params)
             # create a new cursor
@@ -76,17 +64,11 @@ class PostgresTasks:
             cur.execute(
                 sql,
                 (
-                    WirkenergieP,
-                    WirkenergieN,
-                    MomentanleistungP,
-                    MomentanleistungN,
-                    SpannungL1,
-                    SpannungL2,
-                    SpannungL3,
-                    StromL1,
-                    StromL2,
-                    StromL3,
-                    Leistungsfaktor,
+                    PAC,
+                    IAC,
+                    UAC,
+                    FAC,
+                    TOTAL_ENERGY,
                 ),
             )
             # get the generated id back
@@ -103,11 +85,9 @@ class PostgresTasks:
 
         return data_id
 
-    # to test a specific function via "python postgresql_tasks.py" in the powershell
 
-
+# to test a specific function via "python postgresql_tasks.py" in the powershell
 if __name__ == "__main__":
     postgres_task = PostgresTasks()
-    postgres_task.create_table_smartmeter()
-#   postgres_task.insert_smartmeter(1234.1339491293948, 45.2, 0.023, 2.39, 230,
-#                   240.3, 222.23, 50, 51.4, 49.3, 0.56)
+    postgres_task.create_table_fronius_gen24()
+#   postgres_task.insert_fronius_gen24(84, 0.35999999999999999, 232.40000000000001, 49.969999999999999, 1734796.1200000001)

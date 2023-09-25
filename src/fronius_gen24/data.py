@@ -3,11 +3,10 @@ import datetime
 from time import sleep
 from typing import Any
 
-import pytz
-from astral.geocoder import LocationInfo
 from requests import get
 from requests.exceptions import ConnectionError
 from src.fronius_gen24.config import Configuration
+from src.fronius_gen24.postgresql_tasks import PostgresTasks
 
 from src.fronius_gen24.exceptions import (
     WrongFroniusData,
@@ -23,11 +22,13 @@ class FroniusToPostgres:
     def __init__(
         self,
         config: Configuration,
-        location: LocationInfo,
+        client: PostgresTasks,
+        location: dict[str],
         endpoints: list[str],
         tz: Any,
     ) -> None:
         self.config = config
+        self.client = client
         self.location = location
         self.endpoints = endpoints
         self.tz = tz
@@ -109,10 +110,11 @@ class FroniusToPostgres:
             raise DataCollectionError("Unknown data collection type.")
 
     def sun_is_shining(self) -> None:
-        sun = self.location.sun()
         if (
             not self.IGNORE_SUN_DOWN
-            and not sun["sunrise"] < datetime.datetime.now(tz=self.tz) < sun["sunset"]
+            and not self.location["sunrise"]
+            < datetime.datetime.now(tz=self.tz)
+            < self.location["sunset"]
         ):
             raise SunIsDown
         return None
@@ -132,7 +134,14 @@ class FroniusToPostgres:
                         self.data = response.json()
                         collected_data.extend(self.translate_response())
                         sleep(self.BACKOFF_INTERVAL)
-                    self.client.write_points(collected_data)
+                    # insert commoninverterdata
+                    self.data_id = self.client.insert_fronius_gen24(
+                        collected_data[0][1]["fields"]["PAC"],
+                        collected_data[0][1]["fields"]["IAC"],
+                        collected_data[0][1]["fields"]["UAC"],
+                        collected_data[0][1]["fields"]["FAC"],
+                        collected_data[0][1]["fields"]["TOTAL_ENERGY"],
+                    )
                     print("Data written")
                     sleep(self.BACKOFF_INTERVAL)
                 except SunIsDown:

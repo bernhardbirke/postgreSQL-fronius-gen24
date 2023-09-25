@@ -6,6 +6,7 @@ test_config.py
 postgreSQL-fronius-gen24.code-workspace
 fronius-json.py
 fronius-solar-api-v1.pdf
+fronius_readable.txt
 
 #specific folders to ignore
 
