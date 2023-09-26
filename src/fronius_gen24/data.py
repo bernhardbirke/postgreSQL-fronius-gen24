@@ -1,5 +1,6 @@
 # coding: utf-8
 import datetime
+import logging
 from time import sleep
 from typing import Any
 
@@ -16,7 +17,6 @@ from src.fronius_gen24.exceptions import (
 
 
 class FroniusToPostgres:
-    BACKOFF_INTERVAL = 3
     IGNORE_SUN_DOWN: bool = False
 
     def __init__(
@@ -24,21 +24,27 @@ class FroniusToPostgres:
         config: Configuration,
         client: PostgresTasks,
         location: dict[str],
-        endpoints: list[str],
+        endpoint: str,
         tz: Any,
     ) -> None:
         self.config = config
         self.client = client
         self.location = location
-        self.endpoints = endpoints
+        self.endpoint = endpoint
         self.tz = tz
+        self.BACKOFF_INTERVAL: int = 30  # minimum interval between calls in seconds
+        self.IGNORE_SUN_DOWN: bool = (
+            False  # False means only log data when sun is shining
+        )
         self.data: dict[Any, Any] = {}
+        self.data_id: int = 0
 
     def get_float_or_zero(self, value: str) -> float:
         internal_data: dict[Any, Any] = {}
         try:
             internal_data = self.data["Body"]["Data"]
         except KeyError:
+            logging.error("Response structure is not healthy", exc_info=True)
             raise WrongFroniusData("Response structure is not healthy.")
         return float(internal_data.get(value, {}).get("Value", 0))
 
@@ -107,6 +113,7 @@ class FroniusToPostgres:
                 }
             ]
         else:
+            logging.error(f"Unknown data collection type: {collection}", exc_info=True)
             raise DataCollectionError("Unknown data collection type.")
 
     def sun_is_shining(self) -> None:
@@ -125,37 +132,36 @@ class FroniusToPostgres:
 
     def run(self) -> None:
         try:
+            logging.info(f"Application started")
             while True:
                 try:
                     self.sun_is_shining()
-                    collected_data = []
-                    for url in self.endpoints:
-                        response = self.get_response(url)
-                        self.data = response.json()
-                        collected_data.extend(self.translate_response())
-                        sleep(self.BACKOFF_INTERVAL)
+                    response = self.get_response(self.endpoint)
+                    self.data = response  # .json()
+                    collected_data = self.translate_response()
                     # insert commoninverterdata
                     self.data_id = self.client.insert_fronius_gen24(
-                        collected_data[0][1]["fields"]["PAC"],
-                        collected_data[0][1]["fields"]["IAC"],
-                        collected_data[0][1]["fields"]["UAC"],
-                        collected_data[0][1]["fields"]["FAC"],
-                        collected_data[0][1]["fields"]["TOTAL_ENERGY"],
+                        collected_data[1]["fields"]["PAC"],
+                        collected_data[1]["fields"]["IAC"],
+                        collected_data[1]["fields"]["UAC"],
+                        collected_data[1]["fields"]["FAC"],
+                        collected_data[1]["fields"]["TOTAL_ENERGY"],
                     )
-                    print("Data written")
+                    logging.info(f"Data written. Data id: {self.data_id}")
                     sleep(self.BACKOFF_INTERVAL)
                 except SunIsDown:
-                    print("Waiting for sunrise")
+                    logging.warning("No sun is shining. Waiting for sunrise")
                     sleep(60)
-                    print("Waited 60 seconds for sunrise")
+                    logging.info("Waited 60 seconds for sunrise")
                 except ConnectionError:
-                    print("Waiting for connection...")
+                    logging.error("No Connection available", exc_info=True)
                     sleep(10)
-                    print("Waited 10 seconds for connection")
+                    logging.info("Waited 10 seconds for connection")
                 except Exception as e:
                     self.data = {}
                     sleep(10)
+                    logging.error("Exception: {}".format(e), exc_info=True)
                     print("Exception: {}".format(e))
 
         except KeyboardInterrupt:
-            print("Finishing. Goodbye!")
+            logging.info("Stopping program.")

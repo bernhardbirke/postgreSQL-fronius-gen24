@@ -118,5 +118,6 @@ def test_run(mocker, froniustopostgres, responsedata):
     mocker.patch(
         "src.fronius_gen24.data.FroniusToPostgres.get_response", return_value=output
     )
-    response_object = froniustopostgres.get_response()
-    assert response_object["Body"]["Data"]["PAC"]["Value"] == 84
+    froniustopostgres.run()
+    # TODO stop run after 30 sec.
+    assert isinstance(froniustopostgres.data_id, int) and froniustopostgres.data_id > 0
