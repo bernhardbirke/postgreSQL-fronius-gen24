@@ -1,6 +1,7 @@
 # coding: utf-8
 import datetime
 import logging
+import sys
 from time import sleep
 from typing import Any
 
@@ -34,7 +35,7 @@ class FroniusToPostgres:
         self.tz = tz
         self.BACKOFF_INTERVAL: int = 30  # minimum interval between calls in seconds
         self.IGNORE_SUN_DOWN: bool = (
-            False  # False means only log data when sun is shining
+            False  # False means only save data when sun is shining
         )
         self.data: dict[Any, Any] = {}
         self.data_id: int = 0
@@ -46,74 +47,25 @@ class FroniusToPostgres:
         except KeyError:
             logging.error("Response structure is not healthy", exc_info=True)
             raise WrongFroniusData("Response structure is not healthy.")
-        return float(internal_data.get(value, {}).get("Value", 0))
+        return float(internal_data.get(value, {}).get("Values", 0).get("1", 0))
 
     def translate_response(self) -> list[dict]:
-        collection = self.data["Head"]["RequestArguments"]["DataCollection"]
+        scope = self.data["Head"]["RequestArguments"]["Scope"]
         timestamp = self.data["Head"]["Timestamp"]
-        if collection == "CommonInverterData":
-            return [
-                {
-                    "measurement": "DeviceStatus",
-                    "time": timestamp,
-                    "fields": {
-                        "ErrorCode": self.data["Body"]["Data"]["DeviceStatus"][
-                            "ErrorCode"
-                        ],
-                        "LEDColor": self.data["Body"]["Data"]["DeviceStatus"][
-                            "LEDColor"
-                        ],
-                        "LEDState": self.data["Body"]["Data"]["DeviceStatus"][
-                            "LEDState"
-                        ],
-                        "MgmtTimerRemainingTime": self.data["Body"]["Data"][
-                            "DeviceStatus"
-                        ]["MgmtTimerRemainingTime"],
-                        "StateToReset": self.data["Body"]["Data"]["DeviceStatus"][
-                            "StateToReset"
-                        ],
-                        "StatusCode": self.data["Body"]["Data"]["DeviceStatus"][
-                            "StatusCode"
-                        ],
-                    },
+        if scope == "System":
+            return {
+                "time": timestamp,
+                "fields": {
+                    "PAC": self.get_float_or_zero(
+                        "PAC"
+                    ),  # AC power (negative value for consuming power) in W
+                    "TOTAL_ENERGY": self.get_float_or_zero(
+                        "TOTAL_ENERGY"
+                    ),  # AC Energy generated overall in Wh
                 },
-                {
-                    "measurement": collection,
-                    "time": timestamp,
-                    "fields": {
-                        "FAC": self.get_float_or_zero("FAC"),
-                        "IAC": self.get_float_or_zero("IAC"),
-                        "IDC": self.get_float_or_zero("IDC"),
-                        "PAC": self.get_float_or_zero(
-                            "PAC"
-                        ),  # AC power (negative value for consuming power) in W
-                        "UAC": self.get_float_or_zero("UAC"),
-                        "UDC": self.get_float_or_zero("UDC"),
-                        "DAY_ENERGY": self.get_float_or_zero("DAY_ENERGY"),
-                        "YEAR_ENERGY": self.get_float_or_zero("YEAR_ENERGY"),
-                        "TOTAL_ENERGY": self.get_float_or_zero(
-                            "TOTAL_ENERGY"
-                        ),  # AC Energy generated overall in Wh
-                    },
-                },
-            ]
-        elif collection == "3PInverterData":
-            return [
-                {
-                    "measurement": collection,
-                    "time": timestamp,
-                    "fields": {
-                        "IAC_L1": self.get_float_or_zero("IAC_L1"),
-                        "IAC_L2": self.get_float_or_zero("IAC_L2"),
-                        "IAC_L3": self.get_float_or_zero("IAC_L3"),
-                        "UAC_L1": self.get_float_or_zero("UAC_L1"),
-                        "UAC_L2": self.get_float_or_zero("UAC_L2"),
-                        "UAC_L3": self.get_float_or_zero("UAC_L3"),
-                    },
-                }
-            ]
+            }
         else:
-            logging.error(f"Unknown data collection type: {collection}", exc_info=True)
+            logging.error(f"Unknown data collection type: {scope}", exc_info=True)
             raise DataCollectionError("Unknown data collection type.")
 
     def sun_is_shining(self) -> None:
@@ -128,7 +80,7 @@ class FroniusToPostgres:
 
     @staticmethod
     def get_response(url: str) -> Any:
-        return get(url)
+        return get(url).json()
 
     def run(self) -> None:
         try:
@@ -137,15 +89,14 @@ class FroniusToPostgres:
                 try:
                     self.sun_is_shining()
                     response = self.get_response(self.endpoint)
-                    self.data = response  # .json()
+                    logging.debug(f"API Response: {response}")
+                    self.data = response
                     collected_data = self.translate_response()
+                    logging.debug(f"collected data: {collected_data}")
                     # insert commoninverterdata
                     self.data_id = self.client.insert_fronius_gen24(
-                        collected_data[1]["fields"]["PAC"],
-                        collected_data[1]["fields"]["IAC"],
-                        collected_data[1]["fields"]["UAC"],
-                        collected_data[1]["fields"]["FAC"],
-                        collected_data[1]["fields"]["TOTAL_ENERGY"],
+                        collected_data["fields"]["PAC"],
+                        collected_data["fields"]["TOTAL_ENERGY"],
                     )
                     logging.info(f"Data written. Data id: {self.data_id}")
                     sleep(self.BACKOFF_INTERVAL)
@@ -159,9 +110,8 @@ class FroniusToPostgres:
                     logging.info("Waited 10 seconds for connection")
                 except Exception as e:
                     self.data = {}
-                    sleep(10)
                     logging.error("Exception: {}".format(e), exc_info=True)
-                    print("Exception: {}".format(e))
+                    sys.exit(1)
 
         except KeyboardInterrupt:
             logging.info("Stopping program.")

@@ -11,10 +11,7 @@ def postgrestasks():
 # Caution: creates an entry in specified postgresql database
 def test_insert_fronius_gen24(postgrestasks):
     id = postgrestasks.insert_fronius_gen24(
-        84,
-        0.35999999999999999,
-        232.40000000000001,
-        49.969999999999999,
-        1734796.1200000001,
+        6442.39697265625,
+        5350360.6883333335,
     )
     assert isinstance(id, int) and id > 0

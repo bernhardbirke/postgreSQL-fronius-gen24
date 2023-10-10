@@ -28,7 +28,9 @@ fronius_config = config.fronius_config()
 client = PostgresTasks()
 
 # define endpoints for http requests
-endpoint: str = f"http://{fronius_config['fronius_host']}/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DataCollection=CommonInverterData"
+endpoint: str = (
+    f"http://{fronius_config['fronius_host']}/solar_api/v1/GetInverterRealtimeData.cgi"
+)
 #   f"http://{fronius_config['fronius_host']}/solar_api/GetAPIVersion.cgi",
 
 # initialize logging

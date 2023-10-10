@@ -1,6 +1,7 @@
 import pytest
 import pytz
 import datetime
+import json
 from astral.geocoder import database, lookup
 from astral.sun import sun
 from src.fronius_gen24.data import FroniusToPostgres
@@ -36,61 +37,44 @@ def froniustopostgres():
 
 @pytest.fixture  # data response as transmitted by Fronius API V1
 def responsedata():
-    return {
+    response = {
         "Body": {
             "Data": {
-                "DAY_ENERGY": {"Unit": "Wh", "Value": 1393.2},
-                "DeviceStatus": {
-                    "ErrorCode": 0,
-                    "LEDColor": 2,
-                    "LEDState": 0,
-                    "MgmtTimerRemainingTime": -1,
-                    "StateToReset": "false",
-                    "StatusCode": 7,
-                },
-                "FAC": {"Unit": "Hz", "Value": 49.969999999999999},
-                "IAC": {"Unit": "A", "Value": 0.35999999999999999},
-                "IDC": {"Unit": "A", "Value": 0.32000000000000001},
-                "PAC": {"Unit": "W", "Value": 84},
-                "TOTAL_ENERGY": {"Unit": "Wh", "Value": 1734796.1200000001},
-                "UAC": {"Unit": "V", "Value": 232.40000000000001},
-                "UDC": {"Unit": "V", "Value": 399.89999999999998},
-                "YEAR_ENERGY": {"Unit": "Wh", "Value": 322593.5},
+                "DAY_ENERGY": {"Unit": "Wh", "Values": {"1": 0}},
+                "PAC": {"Unit": "W", "Values": {"1": 6442.39697265625}},
+                "TOTAL_ENERGY": {"Unit": "Wh", "Values": {"1": 5350360.6883333335}},
+                "YEAR_ENERGY": {"Unit": "Wh", "Values": {"1": 0}},
             }
         },
         "Head": {
-            "RequestArguments": {
-                "DataCollection": "CommonInverterData",
-                "DeviceClass": "Inverter",
-                "DeviceId": "1",
-                "Scope": "Device",
-            },
+            "RequestArguments": {"Scope": "System"},
             "Status": {"Code": 0, "Reason": "", "UserMessage": ""},
-            "Timestamp": "2019-06-12T15:31:03+02:00",
+            "Timestamp": "2023-09-27T09:53:23+00:00",
         },
     }
+    return response
 
 
 def test_get_float_or_zero_1(froniustopostgres, responsedata):
     froniustopostgres.data = responsedata
-    assert froniustopostgres.get_float_or_zero("PAC") == 84
+    assert froniustopostgres.get_float_or_zero("PAC") == 6442.39697265625
 
 
 def test_get_float_or_zero_2(froniustopostgres, responsedata):
     froniustopostgres.data = responsedata
-    assert froniustopostgres.get_float_or_zero("TOTAL_ENERGY") == 1734796.1200000001
+    assert froniustopostgres.get_float_or_zero("TOTAL_ENERGY") == 5350360.6883333335
 
 
 def test_translate_response_1(froniustopostgres, responsedata):
     froniustopostgres.data = responsedata
     response_object = froniustopostgres.translate_response()
-    assert response_object[1]["fields"]["PAC"] == 84
+    assert response_object["fields"]["PAC"] == 6442.39697265625
 
 
 def test_translate_response_2(froniustopostgres, responsedata):
     froniustopostgres.data = responsedata
     response_object = froniustopostgres.translate_response()
-    assert response_object[1]["fields"]["TOTAL_ENERGY"] == 1734796.1200000001
+    assert response_object["fields"]["TOTAL_ENERGY"] == 5350360.6883333335
 
 
 # run at daytime, test will fail at nighttime
@@ -110,7 +94,7 @@ def test_get_response(mocker, froniustopostgres, responsedata):
         "src.fronius_gen24.data.FroniusToPostgres.get_response", return_value=output
     )
     response_object = froniustopostgres.get_response()
-    assert response_object["Body"]["Data"]["PAC"]["Value"] == 84
+    assert response_object["Body"]["Data"]["PAC"]["Values"]["1"] == 6442.39697265625
 
 
 def test_run(mocker, froniustopostgres, responsedata):

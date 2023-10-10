@@ -14,9 +14,6 @@ class PostgresTasks:
             data_id SERIAL PRIMARY KEY,
             time TIMESTAMP NOT NULL,
             PAC FLOAT4,
-            IAC FLOAT4,
-            UAC FLOAT4,
-            FAC FLOAT4,
             TOTAL_ENERGY FLOAT4
         )
         """
@@ -42,15 +39,12 @@ class PostgresTasks:
 
     def insert_fronius_gen24(
         self,
-        PAC: int,
-        IAC: float,
-        UAC: float,
-        FAC: float,
+        PAC: float,
         TOTAL_ENERGY: float,
     ) -> int:
         """insert a new data row into the fronius_gen24 table"""
-        sql = """INSERT INTO fronius_gen24(time, PAC, IAC, UAC, FAC, TOTAL_ENERGY)
-                VALUES(NOW()::TIMESTAMP, %s, %s, %s, %s, %s) RETURNING data_id;"""
+        sql = """INSERT INTO fronius_gen24(time, PAC, TOTAL_ENERGY)
+                VALUES(NOW()::TIMESTAMP, %s, %s) RETURNING data_id;"""
         conn = None
         data_id = None
         try:
@@ -65,9 +59,6 @@ class PostgresTasks:
                 sql,
                 (
                     PAC,
-                    IAC,
-                    UAC,
-                    FAC,
                     TOTAL_ENERGY,
                 ),
             )
