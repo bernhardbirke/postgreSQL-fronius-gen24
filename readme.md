@@ -48,6 +48,7 @@ In `main_config.yaml` connection configurations are stored.
 ### saved data
 
 Value name | specific data | unit | type Description
+
 PAC | integer | W | AC power (negative value for consuming power)
 
 TOTAL_ENERGY | unsigned number | Wh | AC Energy generated overall GEN24/Tauro: supported since 1.14(updated every

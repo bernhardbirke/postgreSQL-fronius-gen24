@@ -29,9 +29,9 @@ client = PostgresTasks()
 
 # define endpoints for http requests
 endpoint: str = (
-    f"http://{fronius_config['fronius_host']}/solar_api/v1/GetInverterRealtimeData.cgi"
+    f"http://{fronius_config['fronius_ip']}/solar_api/v1/GetInverterRealtimeData.cgi"
 )
-#   f"http://{fronius_config['fronius_host']}/solar_api/GetAPIVersion.cgi",
+#   f"http://{fronius_config['fronius_ip']}/solar_api/GetAPIVersion.cgi",
 
 # initialize logging
 loggingFile: str = os.path.join(ROOT_DIR, "fronius_gen24.log")
