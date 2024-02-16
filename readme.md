@@ -9,40 +9,49 @@ For all necessary modules refer to `requirements.txt`.
 
 python requests module to handle http requests.
 
-    $ pip install requests
+    pip install requests
 
 module to parse `main_config.yaml`:
 
-    $ pip install pyyaml
+    pip install pyyaml
 
 Astral is a python package for calculating the times of various aspects of the sun and moon.
 (https://astral.readthedocs.io/en/latest/)
 
-    $ pip3 install astral
+    pip3 install astral
 
 Module to handel time zone conversions:
 
-    $ pip install pytz
+    pip install pytz
 
 Module to run the tests
 
-    $ pip install pytest
+    pip install pytest
 
 Module to mock the api response for the test environment
 
-    $ pip install pytest-mock
+    pip install pytest-mock
 
 Module for typechecking
 
-    $ pip install mypy
+    pip install mypy
 
 Module to use postgreSQL
 
-    $ pip install psycopg2 or pip install psycopg2-binary
+    pip install psycopg2 or pip install psycopg2-binary
 
 ### Environment files
 
-In `database.ini` the connection details of postgresql and the fronius inverter are stored.
+In `database.ini` the connection details of postgresql and the fronius inverter are stored:
+
+```
+[postgresql]
+host=localhost
+database=my_database
+user=my_username
+password=my_postgresql_pw
+```
+
 In `main_config.yaml` connection configurations are stored.
 
 ### saved data
