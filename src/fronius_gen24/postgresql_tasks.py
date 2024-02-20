@@ -44,7 +44,7 @@ class PostgresTasks:
     ) -> int:
         """insert a new data row into the fronius_gen24 table"""
         sql = """INSERT INTO fronius_gen24(time, PAC, TOTAL_ENERGY)
-                VALUES(NOW()::TIMESTAMP, %s, %s) RETURNING data_id;"""
+                VALUES((NOW() AT TIME ZONE 'UTC'), %s, %s) RETURNING data_id;"""
         conn = None
         data_id = None
         try:
@@ -81,4 +81,4 @@ class PostgresTasks:
 if __name__ == "__main__":
     postgres_task = PostgresTasks()
     postgres_task.create_table_fronius_gen24()
-#   postgres_task.insert_fronius_gen24(84, 0.35999999999999999, 232.40000000000001, 49.969999999999999, 1734796.1200000001)
+#   postgres_task.insert_fronius_gen24(84, 1734796.1200000001)
